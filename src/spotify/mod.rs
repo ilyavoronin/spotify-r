@@ -4,6 +4,13 @@ use url::form_urlencoded::{byte_serialize, ByteSerialize};
 use webbrowser;
 use std::io;
 
+use std::borrow::Cow;
+
+use reqwest::blocking::{Client};
+use base64;
+use serde::Deserialize;
+use reqwest::blocking::Response;
+
 fn url_encode(str: &str) -> String {
     byte_serialize(str.as_bytes()).collect()
 }
@@ -14,6 +21,14 @@ pub struct SpotifyApi{
     id: String,
     secret: String
 }
+#[derive(Deserialize, Debug)]
+struct SpotifyAuthorizeResponse {
+    access_token: String,
+    token_type: String,
+    scope: String,
+    expires_in: i32,
+    refresh_token: String
+}
 
 impl SpotifyApi {
     pub fn new() -> SpotifyApi {
@@ -22,16 +37,14 @@ impl SpotifyApi {
         settings.merge(File::from(Path::new("config.toml"))).unwrap();
 
         let table = settings.get_table("spotify").unwrap();
-        let object = SpotifyApi {
+        SpotifyApi {
             client : reqwest::blocking::Client::new(),
             id: table["client_id"].to_string(),
             secret: table["client_secret"].to_string()
-        };
-        object.auth_app();
-        object
+        }
     }
 
-    fn auth_app(&self) {
+    pub fn auth_app(&self) {
         let redirect = "https://spotify.com";
 
         let scopes: String = ["playlist-modify-private", "user-read-currently-playing"].join(" ");
@@ -46,9 +59,44 @@ impl SpotifyApi {
 
         println!("Input redirect link");
 
-        let mut link: String;
+        let mut link: String = "".to_string();
         io::stdin().read_line(&mut link);
 
+        let parsed = url::Url::parse(&link).unwrap();
+        let args = parsed.query_pairs();
 
+        let mut code: String = "".to_string();
+        for arg in args {
+            if *(arg.0) == "code".to_string() {
+                code = (*(arg.1)).to_string();
+            }
+        }
+
+        println!("{}", code);
+
+        let (access_token, refresh_token) = self.get_tokens(&code, redirect, &self.client);
+    }
+
+    fn get_tokens(&self, code: &str, redirect: &str, client: &reqwest::blocking::Client) -> (String, String) {
+        let url = "https://accounts.spotify.com/api/token";
+
+        let params: [(String, String); 3] = [
+            ("grant_type".to_string(), "authorization_code".to_string()),
+            ("code".to_string(), code.to_string()),
+            ("redirect_uri".to_string(), redirect.to_string())
+        ];
+
+        let header = base64::encode(format!("{}:{}", self.id, self.secret));
+        let req: reqwest::blocking::Request = client.post(url)
+            .header("Authorization", "Basic ".to_string() + &header)
+            .form(&params)
+            .build()
+            .unwrap();
+
+        let resp = client.execute(req);
+        let resp : SpotifyAuthorizeResponse = resp.unwrap().json().unwrap();
+        println!("{:?}", resp);
+
+        ("".to_string(), "".to_string())
     }
 }
