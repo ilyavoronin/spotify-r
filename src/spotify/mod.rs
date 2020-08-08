@@ -9,7 +9,7 @@ use std::borrow::Cow;
 use reqwest::blocking::{Client};
 use base64;
 use serde::Deserialize;
-use reqwest::blocking::Response;
+use reqwest::blocking::{Request, RequestBuilder, Response};
 
 fn url_encode(str: &str) -> String {
     byte_serialize(str.as_bytes()).collect()
@@ -19,7 +19,10 @@ fn url_encode(str: &str) -> String {
 pub struct SpotifyApi{
     client: reqwest::blocking::Client,
     id: String,
-    secret: String
+    secret: String,
+    accessToken: Option<String>,
+    refreshToken: Option<String>,
+    user_id: Option<String>
 }
 #[derive(Deserialize, Debug)]
 struct SpotifyAuthorizeResponse {
@@ -40,11 +43,13 @@ impl SpotifyApi {
         SpotifyApi {
             client : reqwest::blocking::Client::new(),
             id: table["client_id"].to_string(),
-            secret: table["client_secret"].to_string()
+            secret: table["client_secret"].to_string(),
+            accessToken: None,
+            refreshToken: None
         }
     }
 
-    pub fn auth_app(&self) {
+    pub fn auth_app(&mut self) {
         let redirect = "https://spotify.com";
 
         let scopes: String = ["playlist-modify-private", "user-read-currently-playing"].join(" ");
@@ -75,6 +80,11 @@ impl SpotifyApi {
         println!("{}", code);
 
         let (access_token, refresh_token) = self.get_tokens(&code, redirect, &self.client);
+
+        self.accessToken = Some(access_token);
+        self.refreshToken = Some(refresh_token);
+
+        self.get_user_id();
     }
 
     fn get_tokens(&self, code: &str, redirect: &str, client: &reqwest::blocking::Client) -> (String, String) {
@@ -95,8 +105,30 @@ impl SpotifyApi {
 
         let resp = client.execute(req);
         let resp : SpotifyAuthorizeResponse = resp.unwrap().json().unwrap();
-        println!("{:?}", resp);
 
-        ("".to_string(), "".to_string())
+        (resp.access_token, resp.refresh_token)
+    }
+
+    fn add_auth_header(&self, req: RequestBuilder) -> RequestBuilder{
+        let value = "Bearer ".to_string() + self.accessToken.as_ref().unwrap();
+        req.header("Authorization", value)
+    }
+
+    fn get_user_id(&mut self) {
+
+        #[derive(Deserialize, Debug)]
+        struct UserResponse {
+            id: String
+        }
+
+        let url = "https://api.spotify.com/v1/me";
+        let mut req: RequestBuilder = self.client.get(url);
+        let req = self.add_auth_header(req);
+
+        let resp = self.client.execute(req.build().unwrap()).unwrap();
+
+        let data : UserResponse = resp.json().unwrap();
+
+        self.user_id = Some(data.id);
     }
 }

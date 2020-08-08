@@ -14,9 +14,9 @@ use spotify::SpotifyApi;
 
 fn main() {
 
-    let spotify_api = SpotifyApi::new();
+    let mut spotify_api = SpotifyApi::new();
 
-    spotify_api.auth_app();
+    spotify_api.auth_user();
 
     println!("{:?}", spotify_api)
 }
