@@ -18,9 +18,9 @@ fn main() {
 
     spotify_api.auth_user();
 
-    let album = spotify_api.get_album("Another World", Some("Gojira"));
+    let playlist = spotify_api.get_playlists_by_name("test_playlist").unwrap();
 
-    println!("{:?}", album);
+    let album = spotify_api.get_album("Another World", Some("Gojira")).unwrap();
 
-    println!("{:?}", spotify_api);
+    spotify_api.add_track_to_playlist(&playlist.id, &vec![&album.tracks.first().unwrap().id]).expect("AAAAAAAAAAAAAAAAA");
 }

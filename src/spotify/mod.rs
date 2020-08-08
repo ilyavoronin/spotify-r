@@ -1,5 +1,5 @@
 use config::File;
-use std::path::Path;
+use std::path::{Path};
 use url::form_urlencoded::{byte_serialize, ByteSerialize};
 use webbrowser;
 use std::io;
@@ -10,6 +10,10 @@ use reqwest::blocking::{Client};
 use base64;
 use serde::Deserialize;
 use reqwest::blocking::{Request, RequestBuilder, Response};
+use std::fmt;
+use serde::export::Formatter;
+use std::error::Error;
+use std::collections::HashMap;
 
 fn url_encode(str: &str) -> String {
     byte_serialize(str.as_bytes()).collect()
@@ -27,17 +31,17 @@ pub struct SpotifyApi{
 
 #[derive(Deserialize, Debug)]
 pub struct SpotifyPlaylist {
-    collaborative: bool,
-    id : String,
-    name : String,
-    public : bool,
-    snapshot_id : String
+    pub collaborative: bool,
+    pub id : String,
+    pub name : String,
+    pub public : bool,
+    pub snapshot_id : String
 }
 
-#[derive(Debug)]
+#[derive(Debug, Deserialize)]
 pub struct NameId {
-    name : String,
-    id : String
+    pub name : String,
+    pub id : String
 }
 
 impl NameId {
@@ -51,12 +55,30 @@ impl NameId {
 
 #[derive(Debug)]
 pub struct Album {
-    id: String,
-    name : String,
-    artist : Vec<NameId>,
-    release_date : String,
-    tracks : Vec<NameId>
+    pub id: String,
+    pub name : String,
+    pub artist : Vec<NameId>,
+    pub release_date : String,
+    pub tracks : Vec<NameId>
 }
+
+
+#[derive(Debug)]
+pub struct SpotifyError(String);
+
+impl SpotifyError {
+    fn new(msg : &str) -> SpotifyError {
+        SpotifyError(msg.to_string())
+    }
+}
+
+impl fmt::Display for SpotifyError {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", self.0)
+    }
+}
+
+impl Error for SpotifyError {}
 
 impl SpotifyApi {
     pub fn new() -> SpotifyApi {
@@ -82,7 +104,8 @@ impl SpotifyApi {
         let scopes: String = [
             "playlist-modify-private",
             "user-read-currently-playing",
-            "playlist-read-private"
+            "playlist-read-private",
+            "playlist-modify-public"
         ].join(" ");
 
         let url = format!("https://accounts.spotify.com/authorize?client_id={}&response_type=code&redirect_uri={}&scope={}",
@@ -107,8 +130,6 @@ impl SpotifyApi {
                 code = (*(arg.1)).to_string();
             }
         }
-
-        println!("{}", code);
 
         let (access_token, refresh_token) = self.get_tokens(&code, redirect, &self.client);
 
@@ -202,9 +223,7 @@ impl SpotifyApi {
             let mut req = self.client.get(&url);
             let req = self.add_auth_header(req).query(&get_params(cur_offset)).build().unwrap();
 
-            println!("{:?}", req);
             let mut resp  = self.client.execute(req);
-            println!("{:?}", resp);
 
             let mut resp_json : UsersPlaylists = resp.unwrap().json().unwrap();
 
@@ -219,7 +238,7 @@ impl SpotifyApi {
         return playlists
     }
 
-    pub fn get_album(&self, name : &str, artist: Option<&str>) -> Result<Album, reqwest::Error> {
+    pub fn get_album(&self, name : &str, artist: Option<&str>) -> Result<Album, Box<dyn Error>> {
         let url = "https://api.spotify.com/v1/search";
 
         let req = self.client.get(url);
@@ -235,11 +254,7 @@ impl SpotifyApi {
 
         let req = self.add_auth_header(req.query(&params1).query(&params2)).build().unwrap();
 
-        println!("{:?}", req);
-
         let resp = self.client.execute(req);
-
-        println!("{:?}", resp);
 
         #[derive(Deserialize, Debug)]
         struct JsonArtist {
@@ -267,14 +282,60 @@ impl SpotifyApi {
 
         let resp : JsonAlbums = resp?.json()?;
 
-        let mut album = resp.albums.items.first().unwrap();
+        let mut album = resp.albums.items.first();
 
-        return Ok(Album {
-            id: album.id.clone(),
-            name : album.name.clone(),
-            artist : album.artists.iter().map(|art| NameId::new(&art.name, &art.id)).collect(),
-            release_date: album.release_date.clone(),
-            tracks: vec![]
-        })
+        return match album {
+            Some(album) => {
+                let mut album = Album {
+                    id: album.id.clone(),
+                    name : album.name.clone(),
+                    artist : album.artists.iter().map(|art| NameId::new(&art.name, &art.id)).collect(),
+                    release_date: album.release_date.clone(),
+                    tracks: vec![]
+                };
+                self.fill_tracks(&mut album)?;
+                Ok(album)
+            },
+            None => Err(Box::new(SpotifyError("No albumes found".into())))
+        }
+    }
+
+    fn fill_tracks(&self, album: &mut Album) -> Result<(), Box<dyn Error>> {
+        let url = format!("https://api.spotify.com/v1/albums/{}/tracks", album.id);
+
+        let req = self.add_auth_header(self.client.get(&url)).build()?;
+
+        #[derive(Deserialize)]
+        struct JsonTracks {
+            items : Vec<NameId>
+        }
+
+        let resp : JsonTracks = self.client.execute(req)?.json()?;
+
+        album.tracks = resp.items;
+
+        Ok(())
+    }
+
+    pub fn add_track_to_playlist(&self, playlist_id: &str, track_ids: &Vec<&str>) -> Result<(), Box<dyn Error>> {
+        let url = format!("https://api.spotify.com/v1/playlists/{}/tracks", playlist_id);
+
+        let tracks_query : Vec<String> = track_ids.iter()
+            .map(|id| format!("spotify:track:{}", id)).collect();
+        let mut params = HashMap::new();
+
+        params.insert("uris", tracks_query);
+
+        let req = self.client.post(&url)
+            .json(&params)
+            .header("Content-Type", "application/json");
+
+
+
+        let req = self.add_auth_header(req).build().expect("Couldn't build request");
+
+        assert_eq!(self.client.execute(req)?.status().as_u16(), 201);
+
+        Ok(())
     }
 }
