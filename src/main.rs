@@ -18,5 +18,9 @@ fn main() {
 
     spotify_api.auth_user();
 
-    println!("{:?}", spotify_api)
+    let album = spotify_api.get_album("Another World", Some("Gojira"));
+
+    println!("{:?}", album);
+
+    println!("{:?}", spotify_api);
 }
