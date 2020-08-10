@@ -296,7 +296,7 @@ impl SpotifyApi {
                 self.fill_tracks(&mut album)?;
                 Ok(album)
             },
-            None => Err(Box::new(SpotifyError("No albumes found".into())))
+            None => Err(Box::new(SpotifyError("No albums found".into())))
         }
     }
 

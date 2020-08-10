@@ -98,7 +98,7 @@ impl MetalInjectionUpdater {
 }
 
 impl NewAlbumFinder for MetalInjectionUpdater {
-    fn get_new_albums(date: NaiveDate) -> Result<Vec<NewAlbum>, Box<dyn Error>> {
+    fn get_new_albums(&self, date: NaiveDate) -> Result<Vec<NewAlbum>, Box<dyn Error>> {
 
         let urls : Vec<String> = MetalInjectionUpdater::get_pages_url_from_date(date).unwrap();
 
