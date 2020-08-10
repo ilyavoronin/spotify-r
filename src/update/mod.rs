@@ -56,14 +56,19 @@ impl NewAlbumPlaylistUpdater {
                 match self.spotify_api.get_album(&nalb.name, nalb.artist.as_deref()) {
                     Ok(alb) => Some(alb),
                     Err(_) => {
-                        println!("Album {} by {} not found", nalb.name, nalb.artist.as_ref().unwrap());
-                        None
+                        match self.spotify_api.get_album(&nalb.name, nalb.artist.as_deref()) {
+                            Ok(alb) => Some(alb),
+                            Err(_) => {
+                                println!("Album {} by {} not found", nalb.name, nalb.artist.as_ref().unwrap());
+                                None
+                            }
+                        }
                     }
                 }
         ).collect();
 
         let tracks: Vec<&str> = albums.iter().map(|alb| alb.tracks.first().unwrap().id.borrow()).collect();
 
-        self.spotify_api.add_track_to_playlist(&playlist.id, &tracks);
+        self.spotify_api.add_tracks_to_playlist(&playlist.id, &tracks);
     }
 }

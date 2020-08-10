@@ -30,8 +30,4 @@ fn main() {
     );
 
     updater.update_from(1, 7,2020);
-
-    //println!("{:?}", MetalInjectionUpdater::get_new_albums(NaiveDate::from_ymd(2020, 07, 01)));
-
-
 }
