@@ -20,11 +20,17 @@ impl MetalInjectionUpdater {
     }
 
     fn get_date_from_string(s: &str) -> NaiveDate {
-        let real_date = s.split_at(s.find("|").unwrap()).1;
+        let real_date = s;
 
-        let real_date = real_date[1..].trim();
-
-        NaiveDate::parse_from_str(&real_date, "%B %d, %Y").unwrap()
+        return match NaiveDate::parse_from_str(&real_date, "%B %d, %Y") {
+            Ok(res) => res,
+            Err(_) => {
+                let a: char = s.chars().next().unwrap();
+                let days: i64 = a.to_string().parse().unwrap();
+                let cur_date: NaiveDate = chrono::Local::now().date().naive_local();
+                return cur_date - chrono::Duration::days(days)
+            }
+        }
     }
 
     fn get_pages_url_from_date(date: NaiveDate) -> Result<Vec<String>, Box<dyn Error>> {
@@ -36,12 +42,14 @@ impl MetalInjectionUpdater {
 
         let mut res: Vec<String> = vec![];
 
-        for main_node in doc.find(Class("col-md-8")) {
-            for elem in main_node.find(Name("article")) {
-                let link_node = elem.find(Name("a")).next().unwrap();
+        for main_node in doc.find(Attr("id", "zox-home-cont-wrap")) {
+            for elem in main_node.find(Class("zox-art-text")) {
+                let title_node = elem.find(Class("zox-art-title")).next().unwrap();
+                let link_node = title_node.find(Name("a")).next().unwrap();
                 let link = link_node.attr("href").unwrap();
+                println!("{}", link);
 
-                let date_node = elem.find(Class("meta")).next().unwrap();
+                let date_node = elem.find(Class("zox-byline-date")).next().unwrap();
                 let date_text = date_node.text();
 
                 let article_date = MetalInjectionUpdater::get_date_from_string(&date_text);
@@ -63,7 +71,7 @@ impl MetalInjectionUpdater {
 
         let mut res: Vec<NewAlbum> = vec![];
 
-        let main_elem = doc.find(Class("thearticlecontent")).next().unwrap();
+        let main_elem = doc.find(Class("zox-post-body")).next().unwrap();
 
         fn get_album_from_node(elem: Node) -> Option<NewAlbum> {
             let artist_name = elem.first_child().unwrap().text();
@@ -71,7 +79,10 @@ impl MetalInjectionUpdater {
 
             let album_name = match elem.find(Name("em")).next() {
                 Some(s) => s.first_child().unwrap().text(),
-                None => return None
+                None => {
+                    println!("Can't parse {}", elem.text());
+                    return None;
+                }
             };
 
             Some(NewAlbum::new(&album_name, artist_name))
@@ -81,7 +92,7 @@ impl MetalInjectionUpdater {
             let alb: Option<NewAlbum> = get_album_from_node(elem);
             match alb {
                 Some(na) => res.push(na),
-                None => break
+                None => continue
             }
         }
 
@@ -89,7 +100,7 @@ impl MetalInjectionUpdater {
             let alb: Option<NewAlbum> = get_album_from_node(elem);
             match alb {
                 Some(na) => res.push(na),
-                None => break
+                None => continue
             }
         }
 

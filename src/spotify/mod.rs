@@ -214,7 +214,7 @@ impl SpotifyApi {
         #[derive(Deserialize, Debug)]
         struct UsersPlaylists {
             items: Vec<SpotifyPlaylist>,
-            next: Option<i32>
+            next: Option<String>
         }
 
         let mut playlists : Vec<SpotifyPlaylist> = Vec::new();
