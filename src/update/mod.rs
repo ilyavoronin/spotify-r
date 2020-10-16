@@ -57,7 +57,7 @@ impl NewAlbumPlaylistUpdater {
                     Ok(alb) => Some(alb),
                     Err(_) => {
                         match self.spotify_api.get_album(&nalb.name, nalb.artist.as_deref()) {
-                            Ok(alb) => Some(alb),
+                            Ok(alb) => {Some(alb)},
                             Err(_) => {
                                 println!("Album {} by {} not found", nalb.name, nalb.artist.as_ref().unwrap());
                                 None

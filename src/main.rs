@@ -29,5 +29,5 @@ fn main() {
         "test_playlist".to_string()
     );
 
-    updater.update_from(9, 8,2020);
+    updater.update_from(3, 9,2020);
 }

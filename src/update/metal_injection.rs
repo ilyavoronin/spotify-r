@@ -47,7 +47,6 @@ impl MetalInjectionUpdater {
                 let title_node = elem.find(Class("zox-art-title")).next().unwrap();
                 let link_node = title_node.find(Name("a")).next().unwrap();
                 let link = link_node.attr("href").unwrap();
-                println!("{}", link);
 
                 let date_node = elem.find(Class("zox-byline-date")).next().unwrap();
                 let date_text = date_node.text();
@@ -55,6 +54,7 @@ impl MetalInjectionUpdater {
                 let article_date = MetalInjectionUpdater::get_date_from_string(&date_text);
 
                 if article_date >= date {
+                    println!("{}", link);
                     res.push(link.to_string());
                 }
             }

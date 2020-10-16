@@ -256,7 +256,7 @@ impl SpotifyApi {
 
         let resp = self.client.execute(req)?;
 
-        SpotifyApi::handle_response(&resp);
+        SpotifyApi::handle_response(&resp, 200);
 
         #[derive(Deserialize, Debug)]
         struct JsonArtist {
@@ -320,8 +320,8 @@ impl SpotifyApi {
     }
 
     pub fn add_tracks_to_playlist(&self, playlist_id: &str, track_ids: &Vec<&str>) {
-        track_ids.chunks(100).into_iter().for_each(|ch|
-            {self.add_track_to_playlist_100(playlist_id, track_ids);}
+        track_ids.chunks(50).into_iter().for_each(|ch|
+            {self.add_track_to_playlist_100(playlist_id, &ch.to_vec());}
         );
 
     }
@@ -340,22 +340,31 @@ impl SpotifyApi {
             .header("Content-Type", "application/json");
 
 
+        let req = self.add_auth_header(req).build();
 
-        let req = self.add_auth_header(req).build().expect("Couldn't build request");
+        let req = req.expect("Couldn't build request");
 
-        SpotifyApi::handle_response(&self.client.execute(req).unwrap());
+        if !SpotifyApi::handle_response(&self.client.execute(req).unwrap(), 201) {
+            panic!("Tracks weren't added to playlist")
+        }
 
         Ok(())
     }
 
-    fn handle_response(resp: &Response) {
-        match resp.status().as_u16() {
+    fn handle_response(resp: &Response, suc: u16) -> bool {
+        return match resp.status().as_u16() {
             429 => {
                 let time : u32 = resp.headers().get("Retry-After").unwrap().to_str().unwrap().parse().unwrap();
                 println!("Sleeping {} seconds", time);
-                std::thread::sleep_ms(time * 2000)
+                std::thread::sleep_ms(time * 2000);
+                true
             },
-            _ => {}
+            res => if res == suc {
+                true
+            } else {
+                println!("{}", resp.status().as_u16());
+                false
+            }
         };
     }
 }
